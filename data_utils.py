@@ -12,6 +12,7 @@ jieba.initialize()
 def create_dico(item_list):
     """
     Create a dictionary of items from a list of list of items.
+    字典 字符:出现的频率
     """
     assert type(item_list) is list
     dico = {}
@@ -159,7 +160,7 @@ def load_word2vec(emb_path, id_to_word, word_dim, old_weights):
     Load word embedding from pre-trained file
     embedding size must match
     """
-    # 把字典中所有的字转换为向量，假设字在向量文件中，就用字向量文件中的值初始化向量
+    # 把字典中所有的字符转换为向量，假设字符在向量文件中，就用字向量文件中的值初始化向量
     new_weights = old_weights
     print('Loading pretrained embeddings from {}...'.format(emb_path))
     pre_trained = {}
@@ -289,6 +290,7 @@ class BatchManager(object):
 
     def sort_and_pad(self, data, batch_size):
         num_batch = int(math.ceil(len(data) /batch_size))
+        # 按句子长度进行排序
         sorted_data = sorted(data, key=lambda x: len(x[0]))
         batch_data = list()
         for i in range(num_batch):

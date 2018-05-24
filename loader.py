@@ -70,9 +70,9 @@ def char_mapping(sentences, lower):
     Create a dictionary and a mapping of words, sorted by frequency.
     """
     chars = [[x[0].lower() if lower else x[0] for x in s] for s in sentences]
-    dico = create_dico(chars)
-    dico["<PAD>"] = 10000001
-    dico['<UNK>'] = 10000000
+    dico = create_dico(chars) # 字典，包含每个字符及其出现的频率
+    dico["<PAD>"] = 10000001 # 定义填充词
+    dico['<UNK>'] = 10000000 # 定义未登录词
     char_to_id, id_to_char = create_mapping(dico)
     #print("Found %i unique words (%i in total)" % (
     #    len(dico), sum(len(x) for x in chars)
@@ -113,6 +113,11 @@ def prepare_dataset(sentences, char_to_id, tag_to_id, lower=False, train=True):
         - word indexes
         - word char indexes
         - tag indexes
+        
+    Args:
+      sentences: 传入的句子（字符与对应的tag标记）
+      char_to_id: 字符与位置的映射关系
+      tag_to_id: tag标记与位置的映射关系
     """
 
     none_index = tag_to_id["O"]
@@ -151,11 +156,19 @@ def augment_with_pretrained(dictionary, ext_emb_path, chars):
     If `words` is None, we add every word that has a pretrained embedding
     to the dictionary, otherwise, we only add the words that are given by
     `words` (typically the words in the development and test sets.)
+    
+    Args:
+      dictionary: 传入的字典
+      ext_emb_path: 预训练嵌入集地址
+      chars: 传入的字符集
+    Return
+      dictionary, word_to_id, id_to_word
     """
     #print('Loading pretrained embeddings from %s...' % ext_emb_path)
     assert os.path.isfile(ext_emb_path)
 
     # Load pretrained embeddings from file
+    # 加载预训练嵌入集的所有字符
     pretrained = set([
         line.rstrip().split()[0].strip()
         for line in codecs.open(ext_emb_path, 'r', 'utf-8')
@@ -170,6 +183,9 @@ def augment_with_pretrained(dictionary, ext_emb_path, chars):
             if char not in dictionary:
                 dictionary[char] = 0
     else:
+        # 对于chars中的每个字符 如果在 pretrained 存在，在 dictionary 不存在
+        # 往 dictionary 扩充该字符，并且出现频率设置为0
+        # 此处并没有使用预训练嵌入集相应字符的向量
         for char in chars:
             if any(x in pretrained for x in [
                 char,

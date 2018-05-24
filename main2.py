@@ -122,7 +122,7 @@ def train():
         # create dictionary for word
         if FLAGS.pre_emb:
             dico_chars_train = char_mapping(train_sentences, FLAGS.lower)[0]
-            # 使用预训练的嵌入集增强字典            
+            # 利用预训练嵌入集增强（扩充）字符字典，然后返回字符与位置映射关系
             dico_chars, char_to_id, id_to_char = augment_with_pretrained(
                 dico_chars_train.copy(),
                 FLAGS.emb_file,
@@ -134,7 +134,9 @@ def train():
             _c, char_to_id, id_to_char = char_mapping(train_sentences, FLAGS.lower)
 
         # Create a dictionary and a mapping for tags
+        # 获取标记与位置映射关系
         _t, tag_to_id, id_to_tag = tag_mapping(train_sentences)
+        
         #with open('maps.txt','w',encoding='utf8') as f1:
             #f1.writelines(str(char_to_id)+" "+id_to_char+" "+str(tag_to_id)+" "+id_to_tag+'\n')
         with open(FLAGS.map_file, "wb") as f:
@@ -178,6 +180,7 @@ def train():
     # limit GPU memory
     tf_config = tf.ConfigProto()
     tf_config.gpu_options.allow_growth = True
+    # 训练集全量跑一次需要迭代的次数
     steps_per_epoch = train_manager.len_data
     with tf.Session(config=tf_config) as sess:
         

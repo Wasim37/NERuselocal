@@ -74,6 +74,7 @@ class Model(object):
         embedding = self.embedding_layer(self.char_inputs, self.seg_inputs, config)
 
         if self.model_type == 'bilstm':
+            # 双向lstm
             # apply dropout before feed to lstm layer
             model_inputs = tf.nn.dropout(embedding, self.dropout)
 
@@ -84,6 +85,7 @@ class Model(object):
             self.logits = self.project_layer_bilstm(model_outputs)
         
         elif self.model_type == 'idcnn':
+            # 膨胀卷积网络
             # apply dropout before feed to idcnn layer
             model_inputs = tf.nn.dropout(embedding, self.dropout)
 
