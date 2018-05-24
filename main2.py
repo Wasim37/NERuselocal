@@ -157,7 +157,7 @@ def train():
         test_sentences, char_to_id, tag_to_id, FLAGS.lower
     )
     print("%i / %i / %i sentences in train / dev / test." % (
-        len(train_data), 0, len(test_data)))
+        len(train_data), len(dev_data), len(test_data)))
 
     # 获取可供模型训练的单个批次数据
     train_manager = BatchManager(train_data, FLAGS.batch_size)

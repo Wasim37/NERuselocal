@@ -10,7 +10,7 @@ from data_utils import create_input, iobes_iob,iob_iobes
 
 
 class Model(object):
-     #初始化模型参数
+    
     def __init__(self, config):
 
         self.config = config
@@ -26,6 +26,10 @@ class Model(object):
         self.global_step = tf.Variable(0, trainable=False)
         self.best_dev_f1 = tf.Variable(0.0, trainable=False)
         self.best_test_f1 = tf.Variable(0.0, trainable=False)
+        
+        # 如果模型的权重初始化得太小，那么信号将在每层间传递时逐渐缩小而难以产生作用。
+        # 如果权重初始化得太大，那信号将在每层间传递时逐渐放大并导致发散和失效
+        # 此方法会返回一个用于初始化权重的初始化程序 “Xavier”，确保每一层初始化的权重不大不小，方差尽量相等
         self.initializer = initializers.xavier_initializer()
         
         # add placeholders for the model
@@ -71,6 +75,7 @@ class Model(object):
         self.cnn_output_width = 0
         
         # embeddings for chinese character and segmentation representation
+        # 根据 char_inputs 和 seg_inputs 初始化向量
         embedding = self.embedding_layer(self.char_inputs, self.seg_inputs, config)
 
         if self.model_type == 'bilstm':
@@ -129,7 +134,7 @@ class Model(object):
         :return: [1, num_steps, embedding size], 
         """
         #高:3 血:22 糖:23 和:24 高:3 血:22 压:25 char_inputs=[3,22,23,24,3,22,25]
-        #高血糖 和 高血压 seg_inputs 高血糖=[1,2,3] 和=[0] 高血压=[1,2,3]  seg_inputs=[1,2,3,0,1,2,3]
+        #高血糖和高血压 高血糖=[1,2,3] 和=[0] 高血压=[1,2,3]  seg_inputs=[1,2,3,0,1,2,3]
         embedding = []
         with tf.variable_scope("char_embedding" if not name else name), tf.device('/cpu:0'):
             self.char_lookup = tf.get_variable(
@@ -137,8 +142,8 @@ class Model(object):
                     shape=[self.num_chars, self.char_dim],
                     initializer=self.initializer)
             # embedding_lookup详解：https://blog.csdn.net/yinruiyang94/article/details/77600453
-            #输入char_inputs='常' 对应的字典的索引/编号/value为：8
-            #self.char_lookup=[2677*100]的向量，char_inputs字对应在字典的索引/编号/key=[1]            
+            # 输入char_inputs='常' 对应的字典的索引/编号/value为：8
+            # self.char_lookup=[2677*100]的向量，char_inputs字对应在字典的索引/编号/key=[1]            
             embedding.append(tf.nn.embedding_lookup(self.char_lookup, char_inputs))
             #self.embedding1.append(tf.nn.embedding_lookup(self.char_lookup, char_inputs))
             if config["seg_dim"]:
@@ -173,7 +178,7 @@ class Model(object):
                 sequence_length=lengths)
         return tf.concat(outputs, axis=2)
     
-    #IDCNN Iterated Dilated CNN 膨胀卷积神经网络  
+    # Iterated Dilated CNN 膨胀卷积网络  
     def IDCNN_layer(self, model_inputs, 
                     name=None):
         """
@@ -181,7 +186,7 @@ class Model(object):
         :return: [batch_size, num_steps, cnn_output_width]
         """
     
-        #tf.expand_dims会向tensor中插入一个维度，插入位置就是参数代表的位置（维度从0开始）。        
+        # tf.expand_dims会向tensor中插入一个维度，插入位置就是参数代表的位置（维度从0开始）。        
         model_inputs = tf.expand_dims(model_inputs, 1)
         reuse = False
         if self.dropout == 1.0:
@@ -215,7 +220,7 @@ class Model(object):
                     with tf.variable_scope("atrous-conv-layer-%d" % i,
                                            reuse=True
                                            if (reuse or j > 0) else False):
-                        #w 卷积核的高度，卷积核的宽度，图像通道数，卷积核个数
+                        # w 卷积核的高度，卷积核的宽度，图像通道数，卷积核个数
                         w = tf.get_variable(
                             "filterW",
                             shape=[1, self.filter_width, self.num_filter,
@@ -254,12 +259,12 @@ class Model(object):
             keepProb = 1.0 if reuse else 0.5
             finalOut = tf.nn.dropout(finalOut, keepProb)
 
-            #Removes dimensions of size 1 from the shape of a tensor. 
-            #从tensor中删除所有大小是1的维度
+            # Removes dimensions of size 1 from the shape of a tensor. 
+            # 从tensor中删除所有大小是1的维度
         
-            #Given a tensor input, this operation returns a tensor of the same type with all dimensions of size 1 removed. If you don’t want to remove all size 1 dimensions, you can remove specific size 1 dimensions by specifying squeeze_dims. 
+            # Given a tensor input, this operation returns a tensor of the same type with all dimensions of size 1 removed. If you don’t want to remove all size 1 dimensions, you can remove specific size 1 dimensions by specifying squeeze_dims. 
         
-            #给定张量输入，此操作返回相同类型的张量，并删除所有尺寸为1的尺寸。 如果不想删除所有尺寸1尺寸，可以通过指定squeeze_dims来删除特定尺寸1尺寸。
+            # 给定张量输入，此操作返回相同类型的张量，并删除所有尺寸为1的尺寸。 如果不想删除所有尺寸1尺寸，可以通过指定squeeze_dims来删除特定尺寸1尺寸。
 
             finalOut = tf.squeeze(finalOut, [1])
             finalOut = tf.reshape(finalOut, [-1, totalWidthForLastDim])
@@ -294,8 +299,8 @@ class Model(object):
 
             return tf.reshape(pred, [-1, self.num_steps, self.num_tags])
     
-    #Project layer for idcnn by crownpku
-    #Delete the hidden layer, and change bias initializer
+    # Project layer for idcnn by crownpku
+    # Delete the hidden layer, and change bias initializer
     def project_layer_idcnn(self, idcnn_outputs, name=None):
         """
         :param lstm_outputs: [batch_size, num_steps, emb_size] 
@@ -309,7 +314,8 @@ class Model(object):
                                     dtype=tf.float32, initializer=self.initializer)
 
                 b = tf.get_variable("b",  initializer=tf.constant(0.001, shape=[self.num_tags]))
-
+                
+                # 等同于matmul(x, weights) + biases.
                 pred = tf.nn.xw_plus_b(idcnn_outputs, W, b)
 
             return tf.reshape(pred, [-1, self.num_steps, self.num_tags])
@@ -336,14 +342,13 @@ class Model(object):
                 shape=[self.num_tags + 1, self.num_tags + 1],
                 initializer=self.initializer)
             
-            #crf_log_likelihood在一个条件随机场里面计算标签序列的log-likelihood
-            #inputs: 一个形状为[batch_size, max_seq_len, num_tags] 的tensor,
-            #一般使用BILSTM处理之后输出转换为他要求的形状作为CRF层的输入. 
-            #tag_indices: 一个形状为[batch_size, max_seq_len] 的矩阵,其实就是真实标签. 
-            #sequence_lengths: 一个形状为 [batch_size] 的向量,表示每个序列的长度. 
-            #transition_params: 形状为[num_tags, num_tags] 的转移矩阵    
-            #log_likelihood: 标量,log-likelihood 
-            #transition_params: 形状为[num_tags, num_tags] 的转移矩阵            
+            # crf_log_likelihood在一个条件随机场里面计算标签序列的log-likelihood
+            # inputs: 一个形状为[batch_size, max_seq_len, num_tags] 的tensor,
+            # 一般使用BILSTM处理之后输出转换为他要求的形状作为CRF层的输入. 
+            # tag_indices: 一个形状为[batch_size, max_seq_len] 的矩阵,其实就是真实标签. 
+            # sequence_lengths: 一个形状为 [batch_size] 的向量,表示每个序列的长度. 
+            # transition_params: 形状为[num_tags, num_tags] 的转移矩阵    
+            # log_likelihood: 标量, log-likelihood        
             log_likelihood, self.trans = crf_log_likelihood(
                 inputs=logits,
                 tag_indices=targets,

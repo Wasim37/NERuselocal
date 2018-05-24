@@ -176,12 +176,15 @@ def create_model(session, Model_class, path, load_vec, config, id_to_char, logge
         logger.info("Reading model parameters from %s" % ckpt.model_checkpoint_path)
         model.saver.restore(session, ckpt.model_checkpoint_path)
     else:
+        # 加载模型默认参数与预处理的词嵌入
         logger.info("Created model with fresh parameters.")
         session.run(tf.global_variables_initializer())
         if config["pre_emb"]:
+            # 加载模型初始化生成的char_lookup参数值
             emb_weights = session.run(model.char_lookup.read_value())
-            emb_weights = load_vec(config["emb_file"],id_to_char, config["char_dim"], emb_weights)
-            session.run(model.char_lookup.assign(emb_weights))
+            # 更新词嵌入权重：如果char在预训练的词嵌入集中存在便替换
+            emb_weights = load_vec(config["emb_file"], id_to_char, config["char_dim"], emb_weights)
+            session.run(model.char_lookup.assign(emb_weights)) # 重新赋值
             logger.info("Load pre-trained embedding.")
     return model
 
