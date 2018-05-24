@@ -10,6 +10,7 @@ from data_utils import create_input, iobes_iob,iob_iobes
 
 
 class Model(object):
+     #初始化模型参数
     def __init__(self, config):
 
         self.config = config
@@ -20,7 +21,7 @@ class Model(object):
         self.seg_dim = config["seg_dim"]
 
         self.num_tags = config["num_tags"]
-        self.num_chars = config["num_chars"]
+        self.num_chars = config["num_chars"] #样本中总字数
         self.num_segs = 4
 
         self.global_step = tf.Variable(0, trainable=False)
@@ -129,14 +130,19 @@ class Model(object):
         :param config: wither use segmentation feature
         :return: [1, num_steps, embedding size], 
         """
-
+        #高:3 血:22 糖:23 和:24 高:3 血:22 压:25 char_inputs=[3,22,23,24,3,22,25]
+        #高血糖 和 高血压 seg_inputs 高血糖=[1,2,3] 和=[0] 高血压=[1,2,3]  seg_inputs=[1,2,3,0,1,2,3]
         embedding = []
         with tf.variable_scope("char_embedding" if not name else name), tf.device('/cpu:0'):
             self.char_lookup = tf.get_variable(
                     name="char_embedding",
                     shape=[self.num_chars, self.char_dim],
                     initializer=self.initializer)
+            # embedding_lookup详解：https://blog.csdn.net/yinruiyang94/article/details/77600453
+            #输入char_inputs='常' 对应的字典的索引/编号/value为：8
+            #self.char_lookup=[2677*100]的向量，char_inputs字对应在字典的索引/编号/key=[1]            
             embedding.append(tf.nn.embedding_lookup(self.char_lookup, char_inputs))
+            #self.embedding1.append(tf.nn.embedding_lookup(self.char_lookup, char_inputs))
             if config["seg_dim"]:
                 with tf.variable_scope("seg_embedding"), tf.device('/cpu:0'):
                     self.seg_lookup = tf.get_variable(
@@ -169,18 +175,21 @@ class Model(object):
                 sequence_length=lengths)
         return tf.concat(outputs, axis=2)
     
-    #IDCNN layer 
+    #IDCNN Iterated Dilated CNN 膨胀卷积神经网络  
     def IDCNN_layer(self, model_inputs, 
                     name=None):
         """
         :param idcnn_inputs: [batch_size, num_steps, emb_size] 
         :return: [batch_size, num_steps, cnn_output_width]
         """
+    
+        #tf.expand_dims会向tensor中插入一个维度，插入位置就是参数代表的位置（维度从0开始）。        
         model_inputs = tf.expand_dims(model_inputs, 1)
         reuse = False
         if self.dropout == 1.0:
             reuse = True
         with tf.variable_scope("idcnn" if not name else name):
+            #shape=[1*3*120*100]
             shape=[1, self.filter_width, self.embedding_dim,
                        self.num_filter]
             print(shape)
@@ -208,12 +217,31 @@ class Model(object):
                     with tf.variable_scope("atrous-conv-layer-%d" % i,
                                            reuse=True
                                            if (reuse or j > 0) else False):
+                        #w 卷积核的高度，卷积核的宽度，图像通道数，卷积核个数
                         w = tf.get_variable(
                             "filterW",
                             shape=[1, self.filter_width, self.num_filter,
                                    self.num_filter],
                             initializer=tf.contrib.layers.xavier_initializer())
                         b = tf.get_variable("filterB", shape=[self.num_filter])
+                        
+                        #tf.nn.atrous_conv2d(value,filters,rate,padding,name=None）
+                        #除去name参数用以指定该操作的name，与方法有关的一共四个参数：                  
+                        #value： 
+                        #指需要做卷积的输入图像，要求是一个4维Tensor，具有[batch, height, width, channels]这样的shape，具体含义是[训练时一个batch的图片数量, 图片高度, 图片宽度, 图像通道数] 
+                        #filters： 
+                        #相当于CNN中的卷积核，要求是一个4维Tensor，具有[filter_height, filter_width, channels, out_channels]这样的shape，具体含义是[卷积核的高度，卷积核的宽度，图像通道数，卷积核个数]，同理这里第三维channels，就是参数value的第四维
+                        #rate： 
+                        #要求是一个int型的正数，正常的卷积操作应该会有stride（即卷积核的滑动步长），但是空洞卷积是没有stride参数的，
+                        #这一点尤其要注意。取而代之，它使用了新的rate参数，那么rate参数有什么用呢？它定义为我们在输入
+                        #图像上卷积时的采样间隔，你可以理解为卷积核当中穿插了（rate-1）数量的“0”，
+                        #把原来的卷积核插出了很多“洞洞”，这样做卷积时就相当于对原图像的采样间隔变大了。
+                        #具体怎么插得，可以看后面更加详细的描述。此时我们很容易得出rate=1时，就没有0插入，
+                        #此时这个函数就变成了普通卷积。  
+                        #padding： 
+                        #string类型的量，只能是”SAME”,”VALID”其中之一，这个值决定了不同边缘填充方式。
+                        #ok，完了，到这就没有参数了，或许有的小伙伴会问那“stride”参数呢。其实这个函数已经默认了stride=1，也就是滑动步长无法改变，固定为1。
+                        #结果返回一个Tensor，填充方式为“VALID”时，返回[batch,height-2*(filter_width-1),width-2*(filter_height-1),out_channels]的Tensor，填充方式为“SAME”时，返回[batch, height, width, out_channels]的Tensor，这个结果怎么得出来的？先不急，我们通过一段程序形象的演示一下空洞卷积。                                                
                         conv = tf.nn.atrous_conv2d(layerInput,
                                                    w,
                                                    rate=dilation,
@@ -227,6 +255,13 @@ class Model(object):
             finalOut = tf.concat(axis=3, values=finalOutFromLayers)
             keepProb = 1.0 if reuse else 0.5
             finalOut = tf.nn.dropout(finalOut, keepProb)
+
+            #Removes dimensions of size 1 from the shape of a tensor. 
+            #从tensor中删除所有大小是1的维度
+        
+            #Given a tensor input, this operation returns a tensor of the same type with all dimensions of size 1 removed. If you don’t want to remove all size 1 dimensions, you can remove specific size 1 dimensions by specifying squeeze_dims. 
+        
+            #给定张量输入，此操作返回相同类型的张量，并删除所有尺寸为1的尺寸。 如果不想删除所有尺寸1尺寸，可以通过指定squeeze_dims来删除特定尺寸1尺寸。
 
             finalOut = tf.squeeze(finalOut, [1])
             finalOut = tf.reshape(finalOut, [-1, totalWidthForLastDim])
@@ -302,6 +337,15 @@ class Model(object):
                 "transitions",
                 shape=[self.num_tags + 1, self.num_tags + 1],
                 initializer=self.initializer)
+            
+            #crf_log_likelihood在一个条件随机场里面计算标签序列的log-likelihood
+            #inputs: 一个形状为[batch_size, max_seq_len, num_tags] 的tensor,
+            #一般使用BILSTM处理之后输出转换为他要求的形状作为CRF层的输入. 
+            #tag_indices: 一个形状为[batch_size, max_seq_len] 的矩阵,其实就是真实标签. 
+            #sequence_lengths: 一个形状为 [batch_size] 的向量,表示每个序列的长度. 
+            #transition_params: 形状为[num_tags, num_tags] 的转移矩阵    
+            #log_likelihood: 标量,log-likelihood 
+            #transition_params: 形状为[num_tags, num_tags] 的转移矩阵            
             log_likelihood, self.trans = crf_log_likelihood(
                 inputs=logits,
                 tag_indices=targets,
@@ -335,6 +379,13 @@ class Model(object):
         """
         feed_dict = self.create_feed_dict(is_train, batch)
         if is_train:
+            #global_step, loss,_,char_lookup_out,seg_lookup_out,char_inputs_test,seg_inputs_test,embed_test,embedding_test,\
+                            #model_inputs_test,layerInput_test,conv_test,w_test_1,w_test_2,char_inputs_test,start_logits_test,\
+                            #logits_1_test,logits_test,targets_test,log_likelihood_test= sess.run(
+                            #[self.global_step, self.loss, self.train_op,self.char_lookup,self.seg_lookup,self.char_inputs_test,self.seg_inputs_test,\
+                             #self.embed_test,self.embedding_test,self.model_inputs_test,self.layerInput_test,self.conv_test,self.w_test_1,self.w_test_2,self.char_inputs\
+                             #,self.start_logits_test,self.logits_1_test,self.logits_test,self.targets_test,self.log_likelihood_test],
+                            #feed_dict)               
             global_step, loss, _ = sess.run(
                 [self.global_step, self.loss, self.train_op],
                 feed_dict)

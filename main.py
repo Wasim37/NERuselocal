@@ -24,14 +24,18 @@ from utils import make_path
 #from utils import get_logger, make_path, clean, create_model
 #from utils import print_config, save_config, load_config, test_ner
 from data_utils import load_word2vec, create_input, input_from_line, BatchManager
-currentPath=os.getcwd()
-sys.path.append(currentPath)
+
 import jieba
 import jieba.posseg as pseg
 import re,csv
-root_path=os.getcwd()
+
+currentPath=os.getcwd()
+sys.path.append(currentPath)
+root_path=os.getcwd()+os.sep
+
 biaoji = ['DIS', 'SYM', 'SGN', 'TES', 'DRU', 'SUR', 'PRE', 'PT', 'Dur', 'TP', 'REG', 'ORG', 'AT', 'PSB', 'DEG', 'FW',
           'CL']
+
 def load_dict():
     dics=csv.reader(open("DICT_NOW.csv",'r',encoding='utf8'))
     flag=0
@@ -43,6 +47,7 @@ def load_dict():
             continue
         if len(row)==2:
             jieba.add_word(row[0].strip(),tag=row[1].strip())
+            
 global pyversion
 if sys.version>'3':
     pyversion='three'
@@ -52,7 +57,7 @@ if pyversion=='three':
     import pickle
 else :
     import cPickle,pickle
-root_path=os.getcwd()+os.sep
+    
 flags = tf.app.flags
 flags.DEFINE_boolean("clean",       True,      "clean train folder")
 flags.DEFINE_boolean("train",       True,      "Whether train the model")
@@ -138,6 +143,7 @@ tf_config = tf.ConfigProto()
 sess=tf.Session(config=tf_config)
 sess.run(tf.global_variables_initializer()) 
 model = create_model(sess, Model, FLAGS.ckpt_path, load_word2vec, config, id_to_char, logger)
+
 @app.route('/', methods=['POST','GET'])
 def get_text_input():
     #return "connect successfully"
@@ -152,6 +158,7 @@ def get_text_input():
     if text:     
         aa=model.evaluate_line(sess, input_from_line(text, char_to_id), id_to_tag)
         return jsonify(aa)
+    
 if __name__ == "__main__":   
     #load_dict()  
     

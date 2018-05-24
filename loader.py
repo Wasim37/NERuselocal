@@ -120,8 +120,10 @@ def prepare_dataset(sentences, char_to_id, tag_to_id, lower=False, train=True):
     for s in sentences:
         #print(sentences)
         string = [w[0] for w in s]
+        # 字在字典中的位置
         chars = [char_to_id[f(w) if f(w) in char_to_id else '<UNK>']
                  for w in string]
+        # 字的长度特征
         segs = get_seg_features("".join(string))
         if train:
             tags = [tag_to_id[w[-1]] for w in s]

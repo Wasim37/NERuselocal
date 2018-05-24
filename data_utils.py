@@ -159,6 +159,7 @@ def load_word2vec(emb_path, id_to_word, word_dim, old_weights):
     Load word embedding from pre-trained file
     embedding size must match
     """
+    # 把字典中所有的字转换为向量，假设字在向量文件中，就用字向量文件中的值初始化向量
     new_weights = old_weights
     print('Loading pretrained embeddings from {}...'.format(emb_path))
     pre_trained = {}
@@ -282,6 +283,8 @@ def input_from_line(line, char_to_id):
 class BatchManager(object):
 
     def __init__(self, data,  batch_size):
+        # 排序与填充
+        # 每个批次的样本输入保持长度一致，不同批次的长度不一定相同
         self.batch_data = self.sort_and_pad(data, batch_size)
         self.len_data = len(self.batch_data)
 

@@ -140,6 +140,7 @@ def train():
             char_to_id, id_to_char, tag_to_id, id_to_tag = pickle.load(f)
 
     # prepare data, get a collection of list containing index
+    # 提取了四个特征  原文字 字在字典的位置  字的长度  字的标签号
     train_data = prepare_dataset(
         train_sentences, char_to_id, tag_to_id, FLAGS.lower
     )
@@ -152,6 +153,7 @@ def train():
     print("%i / %i / %i sentences in train / dev / test." % (
         len(train_data), 0, len(test_data)))
 
+    # 获取可训练数据
     train_manager = BatchManager(train_data, FLAGS.batch_size)
     dev_manager = BatchManager(dev_data, 100)
     test_manager = BatchManager(test_data, 100)
