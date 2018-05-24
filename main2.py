@@ -111,14 +111,18 @@ def train():
     test_sentences = load_sentences(FLAGS.test_file, FLAGS.lower, FLAGS.zeros)
 
     # Use selected tagging scheme (IOB / IOBES)
+    # 检测并维护数据集的 tag 标记
     update_tag_scheme(train_sentences, FLAGS.tag_schema)
     update_tag_scheme(test_sentences, FLAGS.tag_schema)
     update_tag_scheme(dev_sentences, FLAGS.tag_schema)
+    
     # create maps if not exist
+    # 根据数据集创建 char_to_id, id_to_char, tag_to_id, id_to_tag 字典，并储存为 pkl 文件
     if not os.path.isfile(FLAGS.map_file):
         # create dictionary for word
         if FLAGS.pre_emb:
             dico_chars_train = char_mapping(train_sentences, FLAGS.lower)[0]
+            # 使用预训练的嵌入集增强字典            
             dico_chars, char_to_id, id_to_char = augment_with_pretrained(
                 dico_chars_train.copy(),
                 FLAGS.emb_file,
@@ -140,7 +144,7 @@ def train():
             char_to_id, id_to_char, tag_to_id, id_to_tag = pickle.load(f)
 
     # prepare data, get a collection of list containing index
-    # 提取了四个特征  原文字 字在字典的位置  字的长度  字的标签号
+    # 提取句子特征，转换为模型可接受的数据类型
     train_data = prepare_dataset(
         train_sentences, char_to_id, tag_to_id, FLAGS.lower
     )
@@ -153,10 +157,11 @@ def train():
     print("%i / %i / %i sentences in train / dev / test." % (
         len(train_data), 0, len(test_data)))
 
-    # 获取可训练数据
+    # 获取可供模型训练的单个批次数据
     train_manager = BatchManager(train_data, FLAGS.batch_size)
     dev_manager = BatchManager(dev_data, 100)
     test_manager = BatchManager(test_data, 100)
+    
     # make path for store log and model if not exist
     make_path(FLAGS)
     if os.path.isfile(FLAGS.config_file):
@@ -175,6 +180,8 @@ def train():
     tf_config.gpu_options.allow_growth = True
     steps_per_epoch = train_manager.len_data
     with tf.Session(config=tf_config) as sess:
+        
+        # 此处模型创建为项目最核心代码
         model = create_model(sess, Model, FLAGS.ckpt_path, load_word2vec, config, id_to_char, logger)
         logger.info("start training")
         loss = []
@@ -214,9 +221,9 @@ def evaluate_line():
             # except Exception as e:
             #     logger.info(e)
 
-                line = input("请输入测试句子:")
-                result = model.evaluate_line(sess, input_from_line(line, char_to_id), id_to_tag)
-                print(result)
+            line = input("请输入测试句子:")
+            result = model.evaluate_line(sess, input_from_line(line, char_to_id), id_to_tag)
+            print(result)
 
 
 def main(_):

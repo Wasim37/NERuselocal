@@ -19,7 +19,6 @@ class Model(object):
         self.char_dim = config["char_dim"]
         self.lstm_dim = config["lstm_dim"]
         self.seg_dim = config["seg_dim"]
-
         self.num_tags = config["num_tags"]
         self.num_chars = config["num_chars"] #样本中总字数
         self.num_segs = 4
@@ -29,10 +28,7 @@ class Model(object):
         self.best_test_f1 = tf.Variable(0.0, trainable=False)
         self.initializer = initializers.xavier_initializer()
         
-        
-
         # add placeholders for the model
-
         self.char_inputs = tf.placeholder(dtype=tf.int32,
                                           shape=[None, None],
                                           name="ChatInputs")

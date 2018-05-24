@@ -283,8 +283,7 @@ def input_from_line(line, char_to_id):
 class BatchManager(object):
 
     def __init__(self, data,  batch_size):
-        # 排序与填充
-        # 每个批次的样本输入保持长度一致，不同批次的长度不一定相同
+        # 排序并填充，使单个批次的每个样本保持长度一致，不同批次的长度不一定相同
         self.batch_data = self.sort_and_pad(data, batch_size)
         self.len_data = len(self.batch_data)
 
