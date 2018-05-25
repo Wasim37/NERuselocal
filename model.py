@@ -47,6 +47,7 @@ class Model(object):
         self.dropout = tf.placeholder(dtype=tf.float32,
                                       name="Dropout")
 
+        # 绝对值 求符号 基于行求和 这几行作用? 计算损失？
         used = tf.sign(tf.abs(self.char_inputs))
         length = tf.reduce_sum(used, reduction_indices=1)
         self.lengths = tf.cast(length, tf.int32)
@@ -118,9 +119,11 @@ class Model(object):
                 raise KeyError
 
             # apply grad clip to avoid gradient explosion
+            # 梯度裁剪防止梯度爆炸
             grads_vars = self.opt.compute_gradients(self.loss)
             capped_grads_vars = [[tf.clip_by_value(g, -self.config["clip"], self.config["clip"]), v]
                                  for g, v in grads_vars]
+            # 更新梯度（可以用移动均值更新梯度试试，然后重新跑下程序）
             self.train_op = self.opt.apply_gradients(capped_grads_vars, self.global_step)
 
         # saver of the model
@@ -132,6 +135,7 @@ class Model(object):
         :param seg_inputs: segmentation feature
         :param config: wither use segmentation feature
         :return: [1, num_steps, embedding size], 
+        此处只嵌入了两个特征，不同场景下可以嵌入不同特征，如果嵌入拼音特征、符号特征，应该可以用来检测错别字吧 0.0
         """
         #高:3 血:22 糖:23 和:24 高:3 血:22 压:25 char_inputs=[3,22,23,24,3,22,25]
         #高血糖和高血压 高血糖=[1,2,3] 和=[0] 高血压=[1,2,3]  seg_inputs=[1,2,3,0,1,2,3]
@@ -150,9 +154,10 @@ class Model(object):
                 with tf.variable_scope("seg_embedding"), tf.device('/cpu:0'):
                     self.seg_lookup = tf.get_variable(
                         name="seg_embedding",
-                        shape=[self.num_segs, self.seg_dim],
+                        shape=[self.num_segs, self.seg_dim], # shape=[4,20]
                         initializer=self.initializer)
                     embedding.append(tf.nn.embedding_lookup(self.seg_lookup, seg_inputs))
+            # shape(?, ?, 120) 100维的字向量，20维的tag向量
             embed = tf.concat(embedding, axis=-1)
         return embed
 
@@ -186,7 +191,8 @@ class Model(object):
         :return: [batch_size, num_steps, cnn_output_width]
         """
     
-        # tf.expand_dims会向tensor中插入一个维度，插入位置就是参数代表的位置（维度从0开始）。        
+        # tf.expand_dims会向tensor中插入一个维度，插入位置就是参数代表的位置（维度从0开始）。
+        # shape(?, ?, 120) ——> shape(?, 1, ?, 120)
         model_inputs = tf.expand_dims(model_inputs, 1)
         reuse = False
         if self.dropout == 1.0:
@@ -214,7 +220,7 @@ class Model(object):
             finalOutFromLayers = []
             totalWidthForLastDim = 0
             for j in range(self.repeat_times):
-                for i in range(len(self.layers)):
+                for i in range(len(self.layers)): # 1,1,2
                     dilation = self.layers[i]['dilation']
                     isLast = True if i == (len(self.layers) - 1) else False
                     with tf.variable_scope("atrous-conv-layer-%d" % i,
@@ -228,23 +234,28 @@ class Model(object):
                             initializer=tf.contrib.layers.xavier_initializer())
                         b = tf.get_variable("filterB", shape=[self.num_filter])
                         
+                        
                         #tf.nn.atrous_conv2d(value,filters,rate,padding,name=None）
                         #除去name参数用以指定该操作的name，与方法有关的一共四个参数：                  
                         #value： 
-                        #指需要做卷积的输入图像，要求是一个4维Tensor，具有[batch, height, width, channels]这样的shape，具体含义是[训练时一个batch的图片数量, 图片高度, 图片宽度, 图像通道数] 
+                        #指需要做卷积的输入图像，要求是一个4维Tensor，具有[batch, height, width, channels]这样的shape
+                        #具体含义是[训练时一个batch的图片数量, 图片高度, 图片宽度, 图像通道数] 
                         #filters： 
-                        #相当于CNN中的卷积核，要求是一个4维Tensor，具有[filter_height, filter_width, channels, out_channels]这样的shape，具体含义是[卷积核的高度，卷积核的宽度，图像通道数，卷积核个数]，同理这里第三维channels，就是参数value的第四维
+                        #相当于CNN中的卷积核，要求是一个4维Tensor，具有[filter_height, filter_width, channels, out_channels]这样的shape
+                        #具体含义是[卷积核的高度，卷积核的宽度，图像通道数，卷积核个数]，同理这里第三维channels，就是参数value的第四维
                         #rate： 
-                        #要求是一个int型的正数，正常的卷积操作应该会有stride（即卷积核的滑动步长），但是空洞卷积是没有stride参数的，
-                        #这一点尤其要注意。取而代之，它使用了新的rate参数，那么rate参数有什么用呢？它定义为我们在输入
-                        #图像上卷积时的采样间隔，你可以理解为卷积核当中穿插了（rate-1）数量的“0”，
-                        #把原来的卷积核插出了很多“洞洞”，这样做卷积时就相当于对原图像的采样间隔变大了。
-                        #具体怎么插得，可以看后面更加详细的描述。此时我们很容易得出rate=1时，就没有0插入，
-                        #此时这个函数就变成了普通卷积。  
+                        #要求是一个int型的正数，正常的卷积操作应该会有stride（即卷积核的滑动步长），但是空洞卷积是没有stride参数的，默认是1，这一点尤其要注意。
+                        #取而代之，它使用了新的rate参数，那么rate参数有什么用呢？它定义为我们在输入图像上卷积时的采样间隔，
+                        #你可以理解为卷积核当中穿插了（rate-1）数量的“0”，把原来的卷积核插出了很多“洞洞”，这样做卷积时就相当于对原图像的采样间隔变大了。
+                        #具体怎么插得，可以看后面更加详细的描述。此时我们很容易得出rate=1时，就没有0插入，此时这个函数就变成了普通卷积。  
                         #padding： 
                         #string类型的量，只能是”SAME”,”VALID”其中之一，这个值决定了不同边缘填充方式。
                         #ok，完了，到这就没有参数了，或许有的小伙伴会问那“stride”参数呢。其实这个函数已经默认了stride=1，也就是滑动步长无法改变，固定为1。
-                        #结果返回一个Tensor，填充方式为“VALID”时，返回[batch,height-2*(filter_width-1),width-2*(filter_height-1),out_channels]的Tensor，填充方式为“SAME”时，返回[batch, height, width, out_channels]的Tensor，这个结果怎么得出来的？先不急，我们通过一段程序形象的演示一下空洞卷积。                                                
+                        #结果返回一个Tensor，填充方式为“VALID”时，返回[batch,height-2*(filter_width-1),width-2*(filter_height-1),out_channels]的Tensor
+                        #填充方式为“SAME”时，返回[batch, height, width, out_channels]的Tensor  
+                        
+                        # atrous_conv2d详解：https://blog.csdn.net/mao_xiao_feng/article/details/77924003
+                        #在不使用池化层的情况下增大感受视野：https://blog.csdn.net/guvcolie/article/details/77884530?locationNum=10&fps=1
                         conv = tf.nn.atrous_conv2d(layerInput,
                                                    w,
                                                    rate=dilation,
@@ -261,12 +272,12 @@ class Model(object):
 
             # Removes dimensions of size 1 from the shape of a tensor. 
             # 从tensor中删除所有大小是1的维度
-        
-            # Given a tensor input, this operation returns a tensor of the same type with all dimensions of size 1 removed. If you don’t want to remove all size 1 dimensions, you can remove specific size 1 dimensions by specifying squeeze_dims. 
-        
-            # 给定张量输入，此操作返回相同类型的张量，并删除所有尺寸为1的尺寸。 如果不想删除所有尺寸1尺寸，可以通过指定squeeze_dims来删除特定尺寸1尺寸。
-
+            # Given a tensor input, this operation returns a tensor of the same type with all dimensions of size 1 removed. 
+            # If you don’t want to remove all size 1 dimensions, you can remove specific size 1 dimensions by specifying squeeze_dims. 
+            # 给定张量输入，此操作返回相同类型的张量，并删除所有尺寸为1的尺寸。 如果不想删除所有尺寸1尺寸，可以通过指定squeeze_dims来删除特定位置的1尺寸。
+            # shape(?, ?, ?, 400) ——> shape(?, ?, 400)
             finalOut = tf.squeeze(finalOut, [1])
+            
             finalOut = tf.reshape(finalOut, [-1, totalWidthForLastDim])
             self.cnn_output_width = totalWidthForLastDim
             return finalOut
@@ -318,6 +329,7 @@ class Model(object):
                 # 等同于matmul(x, weights) + biases.
                 pred = tf.nn.xw_plus_b(idcnn_outputs, W, b)
 
+            # shape (?, ?, 51) 51为tag的种类数量
             return tf.reshape(pred, [-1, self.num_steps, self.num_tags])
 
     def loss_layer(self, project_logits, lengths, name=None):
@@ -329,9 +341,13 @@ class Model(object):
         with tf.variable_scope("crf_loss"  if not name else name):
             small = -1000.0
             # pad logits for crf loss
+            # start_logits.shape (?, 1, 52)
             start_logits = tf.concat(
                 [small * tf.ones(shape=[self.batch_size, 1, self.num_tags]), tf.zeros(shape=[self.batch_size, 1, 1])], axis=-1)
-            pad_logits = tf.cast(small * tf.ones([self.batch_size, self.num_steps, 1]), tf.float32)
+            pad_logits = tf.cast(small * tf.ones([self.batch_size, self.num_steps, 1]), tf.float32) 
+            # project_logits.shape (?, ?, 51)
+            # pad_logits.shape (?, ?, 1)
+            # logits.shape (?, ?, 52)
             logits = tf.concat([project_logits, pad_logits], axis=-1)
             logits = tf.concat([start_logits, logits], axis=1)
             targets = tf.concat(
@@ -382,6 +398,7 @@ class Model(object):
         """
         feed_dict = self.create_feed_dict(is_train, batch)
         if is_train:
+            #为了调试，多加了很多参数
             #global_step, loss,_,char_lookup_out,seg_lookup_out,char_inputs_test,seg_inputs_test,embed_test,embedding_test,\
                             #model_inputs_test,layerInput_test,conv_test,w_test_1,w_test_2,char_inputs_test,start_logits_test,\
                             #logits_1_test,logits_test,targets_test,log_likelihood_test= sess.run(
