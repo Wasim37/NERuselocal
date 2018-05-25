@@ -3,14 +3,16 @@ import csv
 import jieba
 import jieba.posseg as pseg
 import re,os
+
 fout1=open('example.dev','w',encoding='utf8')
 fout2=open('example.test','w',encoding='utf8')
 fout3=open('example.train','w',encoding='utf8')
-dics=csv.reader(open("DICT_NOW.csv",'r',encoding='utf8'))
+
 flag=0
 fuhao= ['；','。','?','？','!','！',';']
 biaoji=['DIS','SYM','SGN','TES','DRU','SUR','PRE','PT','Dur','TP','REG','ORG','AT','PSB','DEG','FW','CL']
 
+dics=csv.reader(open("DICT_NOW.csv",'r',encoding='utf8'))
 for row in dics:
     if flag==0:
         flag=1
@@ -30,19 +32,21 @@ path_dir="F:\\git_pro\\ml_project\\NERuselocal_github\\样本数据生成\\origi
     #index=str(3)
 split_num=0
 for file in files:
+    # 只处理文件名包含 txtoriginal 的文件
     if "txtoriginal" in file:
         fp=open(path_dir+file,'r',encoding='utf8')
         lines=[line for line in fp]
         for line in lines:
             split_num+=1
-            words=pseg.cut(line)
+            words=pseg.cut(line) # jieba分词
             for key,value in words: 
-                    print(key)
-                    print(value)
+                    print(key) # 词语
+                    print(value) # 词性
                     if value.strip() and key.strip():
                         if value not in biaoji:
                             value='O'
                             for achar in key.strip():
+                                # 按行数来划分数据集，比例为 1:2:13
                                 if split_num%15<2:
                                     index=str(1)
                                 elif split_num%15>1 and split_num%15<4:
