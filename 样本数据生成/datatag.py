@@ -19,8 +19,8 @@ for row in dics:
         jieba.add_word(row[0].strip(),tag=row[1].strip())
         #jieba.suggest_freq(segment)
 
-files=os.listdir("D:\\code\\NERuselocal\\cyqk\\")
-path_dir="D:\\code\\NERuselocal\\cyqk\\"
+files=os.listdir("F:\\git_pro\\ml_project\\NERuselocal_github\\样本数据生成\\original_data\\")
+path_dir="F:\\git_pro\\ml_project\\NERuselocal_github\\样本数据生成\\original_data\\"
 #split_num1=sum([len(open(path_dir+file,'r',encoding='utf8').readlines()) for file in files if "txtoriginal" in file])
 #if split_num%15==0:
     #index=str(1)
