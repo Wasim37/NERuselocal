@@ -145,8 +145,8 @@ def train():
         with open(FLAGS.map_file, "rb") as f:
             char_to_id, id_to_char, tag_to_id, id_to_tag = pickle.load(f)
 
+    # 提取句子特征
     # prepare data, get a collection of list containing index
-    # 提取句子特征，转换为模型可接受的数据类型
     train_data = prepare_dataset(
         train_sentences, char_to_id, tag_to_id, FLAGS.lower
     )
@@ -231,11 +231,11 @@ def evaluate_line():
 
 def main(_):
 
-    if FLAGS.train:
-        if FLAGS.clean:
-            clean(FLAGS)
-        train()
-    else:
+    #if FLAGS.train:
+        #if FLAGS.clean:
+            #clean(FLAGS)
+        #train()
+    #else:
         evaluate_line()
 
 

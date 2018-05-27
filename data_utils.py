@@ -129,6 +129,9 @@ def get_seg_features(string):
     Segment text with jieba
     features are represented in bies format
     s donates single word
+    将输入句子进行jieba分词，然后获取每个词的长度特征
+    0 代表为单字，1代表词的开头，2代表词的中间部分，3代表词的结尾
+    例如，string=高血糖和血压 高血糖=[1,2,3] 和=[0] 高血压=[1,3] seg_inputs=[1,2,3,0,1,3]
     """
     seg_feature = []
 
@@ -209,6 +212,7 @@ def load_word2vec(emb_path, id_to_word, word_dim, old_weights):
 def full_to_half(s):
     """
     Convert full-width character to half-width one 
+    将全角字符转换为半角字符
     """
     n = []
     for char in s:
@@ -268,12 +272,14 @@ def input_from_line(line, char_to_id):
     """
     Take sentence data and return an input for
     the training or the evaluation function.
+    将输入转化为 string, chars, segs, tags 四个特征
     """
     line = full_to_half(line)
     line = replace_html(line)
     inputs = list()
     inputs.append([line])
     line.replace(" ", "$")
+    # 未登录词按<UNK>字符处理
     inputs.append([[char_to_id[char] if char in char_to_id else char_to_id["<UNK>"]
                    for char in line]])
     inputs.append([get_seg_features(line)])

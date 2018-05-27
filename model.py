@@ -382,7 +382,7 @@ class Model(object):
         feed_dict = {
             self.char_inputs: np.asarray(chars),
             self.seg_inputs: np.asarray(segs),
-            self.dropout: 1.0,
+            self.dropout: 1.0, # 评估无需 dropout
         }
         if is_train:
             feed_dict[self.targets] = np.asarray(tags)
