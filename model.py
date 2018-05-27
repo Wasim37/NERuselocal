@@ -46,8 +46,7 @@ class Model(object):
         # dropout keep prob
         self.dropout = tf.placeholder(dtype=tf.float32,
                                       name="Dropout")
-
-        # 绝对值 求符号 基于行求和 这几行作用? 计算损失？
+        
         used = tf.sign(tf.abs(self.char_inputs))
         length = tf.reduce_sum(used, reduction_indices=1)
         self.lengths = tf.cast(length, tf.int32)
@@ -462,8 +461,40 @@ class Model(object):
         return results
 
     def evaluate_line(self, sess, inputs, id_to_tag):
-        trans = self.trans.eval(session=sess)
+        '''
+        inputs: 心脏病、腰部叩击痛阳性和肌无力
+        lengths: array([15])
+        scores: shape (1, 15, 51)
+        trans: 解码用的转移矩阵
+        batch_paths: [[13, 2, 14, 0, 6, 7, 10, 3, 3, 3, 11, 0, 0, 0, 0]]
+        tags: ['B-DIS', 'I-DIS', 'E-DIS', 'O', 'B-REG', 'E-REG', 'B-SGN', 'I-SGN', 'I-SGN', 'I-SGN', 'E-SGN', 'O', 'O', 'O', 'O']
+        return: 
+         {
+              'entities': [
+                  {
+                      'word': '心脏病',
+                      'type': 'DIS',
+                      'start': 0,
+                      'end': 3
+                  },
+                  {
+                      'word': '腰部',
+                      'type': 'REG',
+                      'start': 4,
+                      'end': 6
+                  },
+                  {
+                      'word': '叩击痛阳性',
+                      'type': 'SGN',
+                      'start': 6,
+                      'end': 11
+                  }
+              ],
+              'string': '心脏病、腰部叩击痛阳性和肌无力'
+          }
+        '''
         lengths, scores = self.run_step(sess, False, inputs)
+        trans = self.trans.eval(session=sess)
         batch_paths = self.decode(scores, lengths, trans)
         tags = [id_to_tag[idx] for idx in batch_paths[0]]
         return result_to_json(inputs[0][0], tags)
